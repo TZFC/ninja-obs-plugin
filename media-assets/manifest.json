@@ -1,0 +1,155 @@
+{
+  "schema_version": 1,
+  "application": "VDO.Ninja OBS plugin",
+  "application_version": "1.1.74",
+  "captured_on": "2026-10-13",
+  "platform": "Windows 11 x64",
+  "repository": "https://github.com/steveseguin/ninja-obs-plugin",
+  "repository_revision_at_capture": "f107c49de73aea33b0f3464ad8fb89e7b99567d3",
+  "binary_sha256": "8dc00681094a9b024b1e8b929a33289e62873dfc365715703f9f7b6fd0be7834",
+  "provenance": "Real packaged application captures. Repository revision identifies the checkout at capture time; binary hash identifies the exact executable or plugin captured.",
+  "capture_method": "Unretouched PNG application client-area screen captures and 15 fps H.264 desktop-region recordings; receiver output images use OBS screenshot API or Chrome viewport capture.",
+  "audio": "Walkthroughs are silent and include English selectable subtitles. Sample source contains no audio.",
+  "demo_content": "Locally hosted procedural Neon Orbit animation; included in fixtures/neon-orbit.html. Shown stream IDs are temporary, inactive demo identifiers.",
+  "verified_workflows": [
+    "Loaded the released plugin v1.1.74 in an isolated OBS 32.2.2 portable installation; checked the loaded DLL path.",
+    "Received and visually inspected moving Game Capture video through VDO.Ninja Source with native receiver enabled.",
+    "Started publishing through the VDO.Ninja Studio dock and confirmed OBS outputActive.",
+    "Chrome decoded 1280x720 video; total decoded frames advanced from 9 to 69 over approximately two seconds.",
+    "Stopped OBS publishing and confirmed outputActive=false."
+  ],
+  "assets": [
+    {
+      "path": "screenshots/01-studio-dock-and-live-source.png",
+      "kind": "screenshot",
+      "mime_type": "image/png",
+      "title": "Studio dock and incoming source",
+      "description": "OBS 32.2.2 with the VDO.Ninja Studio dock and a live native receiver source.",
+      "tags": [
+        "OBS integration",
+        "studio dock",
+        "receive"
+      ],
+      "width": 1648,
+      "height": 903,
+      "bytes": 199764,
+      "sha256": "12ae7d25590f104a3163d328545c1fa6d45edf5553a476f9598985aaf09a4560",
+      "raw_url": "https://raw.githubusercontent.com/steveseguin/ninja-obs-plugin/main/media-assets/screenshots/01-studio-dock-and-live-source.png"
+    },
+    {
+      "path": "screenshots/02-native-source-properties.png",
+      "kind": "screenshot",
+      "mime_type": "image/png",
+      "title": "Native source properties",
+      "description": "Stream ID and experimental native receiver controls with a live source preview.",
+      "tags": [
+        "source properties",
+        "native receiver",
+        "setup"
+      ],
+      "width": 1648,
+      "height": 903,
+      "bytes": 183411,
+      "sha256": "907857a71fc5aea0c12545e4587373b4b70940dc7e590f4b801ffcae081878ef",
+      "raw_url": "https://raw.githubusercontent.com/steveseguin/ninja-obs-plugin/main/media-assets/screenshots/02-native-source-properties.png"
+    },
+    {
+      "path": "screenshots/03-publishing-from-obs.png",
+      "kind": "screenshot",
+      "mime_type": "image/png",
+      "title": "Publishing from OBS",
+      "description": "The Studio dock has started the OBS streaming pipeline to a second VDO.Ninja stream.",
+      "tags": [
+        "publish",
+        "go live"
+      ],
+      "width": 1648,
+      "height": 903,
+      "bytes": 207568,
+      "sha256": "3c6fcdeba34fef86402fbc15a4f57bea6edc4ecc02eef66b30bbdb93227b914b",
+      "raw_url": "https://raw.githubusercontent.com/steveseguin/ninja-obs-plugin/main/media-assets/screenshots/03-publishing-from-obs.png"
+    },
+    {
+      "path": "screenshots/04-live-peer-statistics.png",
+      "kind": "screenshot",
+      "mime_type": "image/png",
+      "title": "Live viewer statistics",
+      "description": "OBS is publishing with one connected browser viewer; the dock shows live status, bytes and uptime.",
+      "tags": [
+        "viewer statistics",
+        "live",
+        "publish"
+      ],
+      "width": 1648,
+      "height": 903,
+      "bytes": 213546,
+      "sha256": "770e01becadc75931befe1fe487868ee1796d230302c609665496940aaf1ed6a",
+      "raw_url": "https://raw.githubusercontent.com/steveseguin/ninja-obs-plugin/main/media-assets/screenshots/04-live-peer-statistics.png"
+    },
+    {
+      "path": "screenshots/05-browser-received-output.png",
+      "kind": "screenshot",
+      "mime_type": "image/png",
+      "title": "Browser playback",
+      "description": "Actual 1280x720 video decoded by a Chrome VDO.Ninja viewer connected to the OBS publish output.",
+      "tags": [
+        "browser playback",
+        "end-to-end"
+      ],
+      "width": 1280,
+      "height": 720,
+      "bytes": 223957,
+      "sha256": "bf43c5ad417c6553e9080ae2757b4256d0b140de9ddcec0f183eb2653269fabd",
+      "raw_url": "https://raw.githubusercontent.com/steveseguin/ninja-obs-plugin/main/media-assets/screenshots/05-browser-received-output.png"
+    },
+    {
+      "path": "videos/obs-vdoninja-walkthrough.mp4",
+      "kind": "screen_recording",
+      "mime_type": "video/mp4",
+      "title": "VDO.Ninja OBS plugin walkthrough",
+      "description": "Receive Game Capture in a native VDO.Ninja Source, configure the Studio dock, and publish OBS output to a browser viewer.",
+      "duration_seconds": 47.47,
+      "width": 1648,
+      "height": 903,
+      "fps": 15.0,
+      "video_codec": "h264",
+      "decode_validation": "Full video/audio decode completed without errors.",
+      "captions": "videos/obs-vdoninja-walkthrough.vtt",
+      "chapters": "walkthrough.json",
+      "bytes": 1445841,
+      "sha256": "e1d05b7064baa4ea2f485a2f83f46162eb3ddf0629aa3a130fd06359f0002d72",
+      "raw_url": "https://raw.githubusercontent.com/steveseguin/ninja-obs-plugin/main/media-assets/videos/obs-vdoninja-walkthrough.mp4"
+    },
+    {
+      "path": "videos/obs-vdoninja-walkthrough.vtt",
+      "kind": "captions",
+      "mime_type": "text/vtt",
+      "title": "English walkthrough captions",
+      "bytes": 639,
+      "sha256": "b9681cbd8459ea895b159edf36133be7b42f0f40e320967c2f32cd60d78102e0",
+      "raw_url": "https://raw.githubusercontent.com/steveseguin/ninja-obs-plugin/main/media-assets/videos/obs-vdoninja-walkthrough.vtt"
+    },
+    {
+      "path": "walkthrough.json",
+      "kind": "chapters",
+      "mime_type": "application/json",
+      "title": "Timestamped walkthrough transcript",
+      "bytes": 829,
+      "sha256": "9a2c2ccf2fa12b2eb2183f557dc45765d2133908af3b0c85778b43ac9b7046cc",
+      "raw_url": "https://raw.githubusercontent.com/steveseguin/ninja-obs-plugin/main/media-assets/walkthrough.json"
+    },
+    {
+      "path": "fixtures/neon-orbit.html",
+      "kind": "demo_fixture",
+      "mime_type": "text/html",
+      "title": "Local animated demo source",
+      "bytes": 2786,
+      "sha256": "beb8be7dd322bfefb1cd279b7bcb0f1286ee607e6ab04db15c44f580eb4a32c9",
+      "raw_url": "https://raw.githubusercontent.com/steveseguin/ninja-obs-plugin/main/media-assets/fixtures/neon-orbit.html"
+    }
+  ],
+  "host_application": {
+    "name": "OBS Studio",
+    "version": "32.2.2"
+  }
+}

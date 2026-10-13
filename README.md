@@ -5,6 +5,8 @@
 
 Native OBS Studio plugin for [VDO.Ninja](https://vdo.ninja), with WebRTC publishing and ingest paths integrated directly into OBS workflows.
 
+[Screenshots and demo videos](media-assets/README.md) | [Machine-readable media manifest](media-assets/manifest.json)
+
 ## What Is VDO.Ninja?
 
 VDO.Ninja is a low-latency WebRTC platform used for live production, remote guests, room-based contribution, and browser-based return feeds. It is commonly used with OBS, often via Browser Sources and links like:
