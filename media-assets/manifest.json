@@ -34,7 +34,8 @@
       "height": 903,
       "bytes": 199764,
       "sha256": "12ae7d25590f104a3163d328545c1fa6d45edf5553a476f9598985aaf09a4560",
-      "raw_url": "https://raw.githubusercontent.com/steveseguin/ninja-obs-plugin/main/media-assets/screenshots/01-studio-dock-and-live-source.png"
+      "raw_url": "https://raw.githubusercontent.com/steveseguin/ninja-obs-plugin/main/media-assets/screenshots/01-studio-dock-and-live-source.png",
+      "contents_api_url": "https://api.github.com/repos/steveseguin/ninja-obs-plugin/contents/media-assets/screenshots/01-studio-dock-and-live-source.png?ref=main"
     },
     {
       "path": "screenshots/02-native-source-properties.png",
@@ -51,7 +52,8 @@
       "height": 903,
       "bytes": 183411,
       "sha256": "907857a71fc5aea0c12545e4587373b4b70940dc7e590f4b801ffcae081878ef",
-      "raw_url": "https://raw.githubusercontent.com/steveseguin/ninja-obs-plugin/main/media-assets/screenshots/02-native-source-properties.png"
+      "raw_url": "https://raw.githubusercontent.com/steveseguin/ninja-obs-plugin/main/media-assets/screenshots/02-native-source-properties.png",
+      "contents_api_url": "https://api.github.com/repos/steveseguin/ninja-obs-plugin/contents/media-assets/screenshots/02-native-source-properties.png?ref=main"
     },
     {
       "path": "screenshots/03-publishing-from-obs.png",
@@ -67,7 +69,8 @@
       "height": 903,
       "bytes": 207568,
       "sha256": "3c6fcdeba34fef86402fbc15a4f57bea6edc4ecc02eef66b30bbdb93227b914b",
-      "raw_url": "https://raw.githubusercontent.com/steveseguin/ninja-obs-plugin/main/media-assets/screenshots/03-publishing-from-obs.png"
+      "raw_url": "https://raw.githubusercontent.com/steveseguin/ninja-obs-plugin/main/media-assets/screenshots/03-publishing-from-obs.png",
+      "contents_api_url": "https://api.github.com/repos/steveseguin/ninja-obs-plugin/contents/media-assets/screenshots/03-publishing-from-obs.png?ref=main"
     },
     {
       "path": "screenshots/04-live-peer-statistics.png",
@@ -84,7 +87,8 @@
       "height": 903,
       "bytes": 213546,
       "sha256": "770e01becadc75931befe1fe487868ee1796d230302c609665496940aaf1ed6a",
-      "raw_url": "https://raw.githubusercontent.com/steveseguin/ninja-obs-plugin/main/media-assets/screenshots/04-live-peer-statistics.png"
+      "raw_url": "https://raw.githubusercontent.com/steveseguin/ninja-obs-plugin/main/media-assets/screenshots/04-live-peer-statistics.png",
+      "contents_api_url": "https://api.github.com/repos/steveseguin/ninja-obs-plugin/contents/media-assets/screenshots/04-live-peer-statistics.png?ref=main"
     },
     {
       "path": "screenshots/05-browser-received-output.png",
@@ -100,7 +104,8 @@
       "height": 720,
       "bytes": 223957,
       "sha256": "bf43c5ad417c6553e9080ae2757b4256d0b140de9ddcec0f183eb2653269fabd",
-      "raw_url": "https://raw.githubusercontent.com/steveseguin/ninja-obs-plugin/main/media-assets/screenshots/05-browser-received-output.png"
+      "raw_url": "https://raw.githubusercontent.com/steveseguin/ninja-obs-plugin/main/media-assets/screenshots/05-browser-received-output.png",
+      "contents_api_url": "https://api.github.com/repos/steveseguin/ninja-obs-plugin/contents/media-assets/screenshots/05-browser-received-output.png?ref=main"
     },
     {
       "path": "videos/obs-vdoninja-walkthrough.mp4",
@@ -118,7 +123,8 @@
       "chapters": "walkthrough.json",
       "bytes": 1445841,
       "sha256": "e1d05b7064baa4ea2f485a2f83f46162eb3ddf0629aa3a130fd06359f0002d72",
-      "raw_url": "https://raw.githubusercontent.com/steveseguin/ninja-obs-plugin/main/media-assets/videos/obs-vdoninja-walkthrough.mp4"
+      "raw_url": "https://raw.githubusercontent.com/steveseguin/ninja-obs-plugin/main/media-assets/videos/obs-vdoninja-walkthrough.mp4",
+      "contents_api_url": "https://api.github.com/repos/steveseguin/ninja-obs-plugin/contents/media-assets/videos/obs-vdoninja-walkthrough.mp4?ref=main"
     },
     {
       "path": "videos/obs-vdoninja-walkthrough.vtt",
@@ -127,7 +133,8 @@
       "title": "English walkthrough captions",
       "bytes": 639,
       "sha256": "b9681cbd8459ea895b159edf36133be7b42f0f40e320967c2f32cd60d78102e0",
-      "raw_url": "https://raw.githubusercontent.com/steveseguin/ninja-obs-plugin/main/media-assets/videos/obs-vdoninja-walkthrough.vtt"
+      "raw_url": "https://raw.githubusercontent.com/steveseguin/ninja-obs-plugin/main/media-assets/videos/obs-vdoninja-walkthrough.vtt",
+      "contents_api_url": "https://api.github.com/repos/steveseguin/ninja-obs-plugin/contents/media-assets/videos/obs-vdoninja-walkthrough.vtt?ref=main"
     },
     {
       "path": "walkthrough.json",
@@ -136,7 +143,8 @@
       "title": "Timestamped walkthrough transcript",
       "bytes": 829,
       "sha256": "9a2c2ccf2fa12b2eb2183f557dc45765d2133908af3b0c85778b43ac9b7046cc",
-      "raw_url": "https://raw.githubusercontent.com/steveseguin/ninja-obs-plugin/main/media-assets/walkthrough.json"
+      "raw_url": "https://raw.githubusercontent.com/steveseguin/ninja-obs-plugin/main/media-assets/walkthrough.json",
+      "contents_api_url": "https://api.github.com/repos/steveseguin/ninja-obs-plugin/contents/media-assets/walkthrough.json?ref=main"
     },
     {
       "path": "fixtures/neon-orbit.html",
@@ -145,11 +153,14 @@
       "title": "Local animated demo source",
       "bytes": 2786,
       "sha256": "beb8be7dd322bfefb1cd279b7bcb0f1286ee607e6ab04db15c44f580eb4a32c9",
-      "raw_url": "https://raw.githubusercontent.com/steveseguin/ninja-obs-plugin/main/media-assets/fixtures/neon-orbit.html"
+      "raw_url": "https://raw.githubusercontent.com/steveseguin/ninja-obs-plugin/main/media-assets/fixtures/neon-orbit.html",
+      "contents_api_url": "https://api.github.com/repos/steveseguin/ninja-obs-plugin/contents/media-assets/fixtures/neon-orbit.html?ref=main"
     }
   ],
   "host_application": {
     "name": "OBS Studio",
     "version": "32.2.2"
-  }
+  },
+  "repository_visibility_at_capture": "public",
+  "download_access": "Public raw URLs are readable without authentication."
 }
