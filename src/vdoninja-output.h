@@ -47,7 +47,7 @@ public:
 
 	// OBS output lifecycle
 	bool start();
-	void stop();
+	void stop(bool signalStop = false);
 	void data(encoder_packet *packet);
 
 	// Get statistics

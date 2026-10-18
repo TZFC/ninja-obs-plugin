@@ -10,6 +10,7 @@
 #include <QScrollArea>
 #include <QSizePolicy>
 #include <QSpinBox>
+#include <QTabWidget>
 #include <QToolButton>
 #include <QVBoxLayout>
 #include <cstring>
@@ -18,6 +19,7 @@
 #include <util/config-file.h>
 
 #include "plugin-main.h"
+#include "vdoninja-guest-return-widget.h"
 #include "vdoninja-output.h"
 #include "vdoninja-publish-obs.h"
 #include "vdoninja-update-checker.h"
@@ -62,6 +64,7 @@ VDONinjaDock::~VDONinjaDock() {}
 
 void VDONinjaDock::shutdown()
 {
+	stopGuestReturn();
 	if (updateChecker_)
 		updateChecker_->shutdown();
 	saveSettings();
@@ -71,6 +74,12 @@ void VDONinjaDock::shutdown()
 	if (chatClearTimer) {
 		chatClearTimer->stop();
 	}
+}
+
+void VDONinjaDock::stopGuestReturn()
+{
+	if (guestReturn_)
+		guestReturn_->stop();
 }
 
 void VDONinjaDock::setupUi()
@@ -240,12 +249,25 @@ void VDONinjaDock::setupUi()
 
 	layout->addStretch();
 	scrollArea->setWidget(container);
+	auto *tabs = new QTabWidget(this);
+	tabs->addTab(scrollArea, obs_module_text_vdo("VDONinja.Dock.PublishTab"));
+	auto *returnScroll = new QScrollArea(tabs);
+	returnScroll->setWidgetResizable(true);
+	returnScroll->setFrameShape(QFrame::NoFrame);
+	returnScroll->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
+	auto *returnPage = new QWidget(returnScroll);
+	auto *returnLayout = new QVBoxLayout(returnPage);
+	guestReturn_ = new GuestReturnWidget(returnPage);
+	returnLayout->addWidget(guestReturn_);
+	returnLayout->addStretch();
+	returnScroll->setWidget(returnPage);
+	tabs->addTab(returnScroll, obs_module_text_vdo("GuestReturn.Title"));
 
 	// Keep the version visible even when the session settings need scrolling.
 	QWidget *body = new QWidget(this);
 	QVBoxLayout *bodyLayout = new QVBoxLayout(body);
 	bodyLayout->setContentsMargins(0, 0, 0, 0);
-	bodyLayout->addWidget(scrollArea, 1);
+	bodyLayout->addWidget(tabs, 1);
 	lblVersion = new QLabel(body);
 	lblVersion->setObjectName("VDONinjaVersionStatus");
 	lblVersion->setTextFormat(Qt::RichText);
@@ -284,6 +306,7 @@ void VDONinjaDock::updateVersionStatus()
 
 void VDONinjaDock::loadSettings()
 {
+	guestReturn_->loadSettings();
 	loadingSettings_ = true;
 	config_t *config = obs_frontend_get_profile_config();
 	if (!config) {

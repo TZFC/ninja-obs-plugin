@@ -143,7 +143,7 @@ Portable OBS note: if launching from terminal, start `obs64.exe` from `bin\64bit
    - Compact: `<StreamID>|<Password>|<RoomID>|<Salt>|<WSS_URL>`
 6. Click `Start Streaming`
 
-Studio note: `Go Live`/`Stop` use the same OBS `Start Streaming`/`Stop Streaming` pipeline and active stream slot. They are not a second parallel output path. If you configured advanced service options, save them under `Settings -> Stream` and use OBS `Start Streaming`; Studio `Go Live` rebuilds the service from the dock's basic fields and default advanced values.
+Studio note: `Go Live`/`Stop` use the same OBS `Start Streaming`/`Stop Streaming` pipeline and active stream slot. The separate **Guest Return** controls send the program through an independent H.264/Opus output while a normal public stream continues. Select a return audio track that excludes the guest in OBS's Advanced Audio Properties; see [the guest-return setup](QUICKSTART.md#guest-return-alongside-a-public-stream). If you configured advanced service options, save them under `Settings -> Stream` and use OBS `Start Streaming`; Studio `Go Live` rebuilds the service from the dock's basic fields and default advanced values.
 
 The plugin parses stream-key URLs like:
 

@@ -352,6 +352,8 @@ if(BUILD_PLUGIN)
         src/vdoninja-publish-settings.cpp
         src/vdoninja-network-settings.cpp
         src/vdoninja-dock.cpp
+        src/vdoninja-guest-return.cpp
+        src/vdoninja-guest-return-widget.cpp
         src/vdoninja-update-checker.cpp
     )
 
@@ -385,6 +387,8 @@ if(BUILD_PLUGIN)
         src/vdoninja-utils.h
         src/vdoninja-video-keyframe-gate.h
         src/vdoninja-dock.h
+        src/vdoninja-guest-return.h
+        src/vdoninja-guest-return-widget.h
         src/vdoninja-update-checker.h
     )
 
@@ -693,6 +697,17 @@ if(BUILD_TESTS)
     add_dependencies(vdoninja-tests vdoninja-module-lifecycle-tests)
 
     include(GoogleTest)
+    add_executable(vdoninja-guest-return-tests
+        tests/test-guest-return.cpp
+        src/vdoninja-guest-return.cpp
+    )
+    target_include_directories(vdoninja-guest-return-tests BEFORE PRIVATE
+        ${CMAKE_CURRENT_SOURCE_DIR}/tests/guest-return-stubs
+        ${CMAKE_CURRENT_SOURCE_DIR}/src
+    )
+    target_link_libraries(vdoninja-guest-return-tests PRIVATE vdoninja-testable GTest::gtest_main)
+    add_dependencies(vdoninja-tests vdoninja-guest-return-tests)
+    gtest_discover_tests(vdoninja-guest-return-tests TEST_PREFIX "GuestReturn.")
     gtest_discover_tests(vdoninja-tests)
     gtest_discover_tests(vdoninja-module-lifecycle-tests TEST_PREFIX "ModuleBoundary.")
 

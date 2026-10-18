@@ -339,6 +339,17 @@ size_t getPreferredStreamAudioTrackIndex()
 
 size_t resolveOutputAudioTrackIndex(obs_output_t *output)
 {
+	// Independent publishers explicitly select an encoder slot. Its mixer index
+	// can be track 2..6 and must not be confused with the packet's track_idx.
+	if (output) {
+		auto *settings = obs_output_get_settings(output);
+		const bool explicitSlot = obs_data_has_user_value(settings, "audio_encoder_index");
+		const auto index = obs_data_get_int(settings, "audio_encoder_index");
+		obs_data_release(settings);
+		if (explicitSlot && index >= 0 && index < static_cast<int64_t>(kMaxAudioMixes) &&
+		    obs_output_get_audio_encoder(output, static_cast<size_t>(index)))
+			return static_cast<size_t>(index);
+	}
 	const size_t preferredTrackIdx = getPreferredStreamAudioTrackIndex();
 	if (!output) {
 		return preferredTrackIdx;
@@ -400,7 +411,7 @@ static void vdoninja_output_stop(void *data, uint64_t)
 {
 	runNoexceptCallback("vdoninja_output_stop", [data]() {
 		auto *vdo = static_cast<VDONinjaOutput *>(data);
-		vdo->stop();
+		vdo->stop(true);
 	});
 }
 
@@ -2256,7 +2267,7 @@ void VDONinjaOutput::startThread(OutputSettings settingsSnap)
 	}
 }
 
-void VDONinjaOutput::stop()
+void VDONinjaOutput::stop(bool signalStop)
 {
 	std::lock_guard<std::mutex> startStopLock(startStopMutex_);
 
@@ -2273,6 +2284,8 @@ void VDONinjaOutput::stop()
 			startStopThread_.join();
 		}
 		restoreEncoderBitrate();
+		if (signalStop)
+			obs_output_end_data_capture(output_);
 		return;
 	}
 
@@ -2337,7 +2350,7 @@ void VDONinjaOutput::stop()
 	}
 
 	// End data capture
-	if (capturing_) {
+	if (capturing_ || signalStop) {
 		obs_output_end_data_capture(output_);
 		capturing_ = false;
 	}

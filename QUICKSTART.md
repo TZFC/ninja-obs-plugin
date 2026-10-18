@@ -58,6 +58,20 @@ Viewer link pattern:
 - Room view: `https://vdo.ninja/?view=mytest123&room=myroom&solo`
 - Room view with password: `https://vdo.ninja/?view=mytest123&room=myroom&solo&password=yourpass`
 
+## Guest return alongside a public stream
+
+Use **Tools -> VDO.Ninja Studio -> Guest Return** to send the full OBS program to one guest while OBS streams to YouTube or another normal destination.
+
+1. Add the guest as a VDO.Ninja Source and include it in the program scene.
+2. In **Advanced Audio Properties**, put the host, guest, music, and clips on track 1 for the public broadcast. Put the host, music, and clips on track 2, leaving the guest unchecked on track 2.
+3. In **Guest Return**, choose track 2, a separate stream ID, and an H.264 encoder. The default return bitrate is 2500 kbps. The return uses its own video encoder and Opus audio encoder, so allow for the extra encoding load.
+4. Click **Start return**, then **Copy return viewer link**. Start the public stream using OBS's normal **Start Streaming** button. Either output can be started first or stopped independently.
+5. Give the guest the return viewer link. To publish their camera and watch the return in one VDO.Ninja page, use a link such as `https://vdo.ninja/?push=GUEST_ID&view=RETURN_ID&password=YOUR_PASSWORD`, using the same password for these two feeds. Use `GUEST_ID` in the OBS source and `RETURN_ID` in Guest Return. Headphones prevent the return audio from reaching their microphone.
+
+The selected return track is a manual mix-minus: it excludes whichever sources you uncheck on that track. It does not automatically detect guests or create separate mixes for multiple guests. Settings are saved per OBS profile. Changing profiles or scene collections stops the return; start it again when ready. Hiding the dock keeps it running. Guest Return uses the default VDO.Ninja signaling service and does not inherit advanced settings from OBS's main streaming service.
+
+The dock's original **Go Live** and **Stop** buttons still control OBS's main stream. Use the buttons inside **Guest Return** for the independent return.
+
 ## 3) Ingest a VDO.Ninja stream in OBS
 
 1. Recommended today: use Browser Source or room-based auto-inbound.

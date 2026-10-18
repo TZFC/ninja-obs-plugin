@@ -18,6 +18,7 @@ namespace vdoninja
 {
 
 class VDONinjaUpdateChecker;
+class GuestReturnWidget;
 
 class VDONinjaDock : public QDockWidget
 {
@@ -30,6 +31,7 @@ public:
 	void prepareStreaming();
 	void reloadProfileSettings();
 	void shutdown();
+	void stopGuestReturn();
 
 	// Called from output thread (via obs_queue_task) to show chat messages
 	void onChatReceived(const QString &sender, const QString &message);
@@ -75,6 +77,7 @@ private:
 	QLabel *lblChat;
 	QLabel *lblVersion;
 	VDONinjaUpdateChecker *updateChecker_ = nullptr;
+	GuestReturnWidget *guestReturn_ = nullptr;
 
 	QTimer *statsTimer;
 	QTimer *chatClearTimer;
