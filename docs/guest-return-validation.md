@@ -15,12 +15,12 @@ ctest --test-dir build-installer-release-tests -C Release --output-on-failure
 
 ## Windows runtime check, 2026-10-18
 
-Used an isolated portable OBS 32.2.2 instance and verified that its loaded module path pointed to the locally built DLL. Tested x264 and NVIDIA NVENC H.264. The normal stream used H.264/AAC on track 1 and sent to a local RTMP receiver; no public streaming account was used. A real Chromium VDO.Ninja guest published synthetic camera/microphone media and received the return in the same page.
+Used an isolated portable OBS 32.2.2 instance and verified that its loaded module path pointed to the locally built DLL. Tested x264 and NVIDIA NVENC H.264, then repeated the NVENC run using a clean checkout of the committed guest-return change. The normal stream used H.264/AAC on track 1 and sent to a local RTMP receiver; no public streaming account was used. A real Chromium VDO.Ninja guest published synthetic camera/microphone media and received the return in the same page.
 
 Four distinct tones represented the host (300 Hz), guest (600 Hz), music (900 Hz), and clip (1200 Hz). The guest tone entered OBS through a VDO.Ninja Source; the other tones were OBS media sources.
 
 - Including all four sources on return track 2 made all four tones measurable at the guest.
-- Excluding only the guest from track 2 reduced its returned tone by approximately 63 dB. The other tones changed by less than 1 dB. The local RTMP recording still contained the guest.
+- Excluding only the guest from track 2 reduced its returned tone by approximately 50 dB in the clean-checkout run. The other tones changed by less than 1 dB. The local RTMP recording still contained the guest.
 - Re-including the guest restored its tone. Muting and restoring the clip affected the return as expected.
 - Full program video decoded at the guest while the main stream ran. Either output could start first.
 - Stopping the return left the main stream and recording active. Restarting the return reconnected the guest; stopping the main stream left the return playing.
