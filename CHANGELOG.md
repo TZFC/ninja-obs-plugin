@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.1.76] - 2026-10-26
+
+- Remove unnecessary software-decoder buffering that could leave audio roughly 300 ms ahead of video. Preserve exact VP9 color/alpha pairing and transparency support.
+- Bound native video receive buffering and recover safely after stalls, overload, and packet loss instead of accumulating latency.
+- Rebase paused receive timestamps so audio and video resume promptly when a sender restarts its media clock.
+- Preserve publisher RTP cadence across timestamp rollover during long-running streams.
+- Prevent custom x264 options from re-enabling B-frames while preserving other encoder settings.
+- Import Stream Key URL parameters from both query strings and fragments, with regression coverage for precedence and encoded values.
+
 ## [1.1.75] - 2026-10-18
 
 - Add a separate Guest Return tab in VDO.Ninja Studio to send the full OBS program and a selected audio track while the normal public stream and recording continue independently.
