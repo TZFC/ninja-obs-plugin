@@ -12,6 +12,42 @@
 namespace vdoninja
 {
 
+bool isVp9Keyframe(const uint8_t *data, size_t size)
+{
+	if (!data || size < 4)
+		return false;
+	size_t bit = 0;
+	const auto read = [&](unsigned count) {
+		unsigned value = 0;
+		while (count--) {
+			value = (value << 1) | ((data[bit / 8] >> (7 - bit % 8)) & 1);
+			++bit;
+		}
+		return value;
+	};
+	if (read(2) != 2)
+		return false;
+	const unsigned low = read(1);
+	const unsigned profile = low | (read(1) << 1);
+	if (profile == 3 && (size < 5 || read(1) != 0))
+		return false;
+	if (read(1) != 0 || read(1) != 0)
+		return false; // show-existing / inter frame
+	read(2);          // show-frame / error-resilient
+	return read(24) == 0x498342;
+}
+
+bool isH264Keyframe(const uint8_t *data, size_t size)
+{
+	if (!data)
+		return false;
+	for (size_t i = 0; i + 3 < size; ++i) {
+		if (data[i] == 0 && data[i + 1] == 0 && data[i + 2] == 1 && (data[i + 3] & 0x1f) == 5)
+			return true;
+	}
+	return false;
+}
+
 std::optional<RtpPayloadView> parseRtpPayloadView(const uint8_t *packetData, size_t packetSize)
 {
 	if (!packetData || packetSize < 12) {
