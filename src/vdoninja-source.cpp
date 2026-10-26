@@ -782,6 +782,7 @@ VDONinjaSource::VDONinjaSource(obs_data_t *settings, obs_source_t *source) : sou
 	if (isInternalNativeSource()) {
 		signaling_ = std::make_unique<VDONinjaSignaling>();
 		peerManager_ = std::make_unique<VDONinjaPeerManager>();
+		videoReceiveThread_ = std::thread(&VDONinjaSource::videoReceiveLoop, this);
 		logWarning("VDO.Ninja Source native receiver mode is experimental (VP9/H.264 video + Opus audio)");
 	} else {
 		updateWrapperChildSource();
@@ -804,6 +805,7 @@ VDONinjaSource::VDONinjaSource(NativeMediaTestTag)
 	active_.store(true, std::memory_order_release);
 	nativeVideoCodec_ = NativeVideoCodec::VP9;
 	videoHwDecodeDisabled_ = true;
+	videoReceiveThread_ = std::thread(&VDONinjaSource::videoReceiveLoop, this);
 	publishOutputDimensions(16, 16);
 	outputMediaEpoch_.store(mediaEpochGate_.capture(), std::memory_order_release);
 }
@@ -848,6 +850,17 @@ void VDONinjaSource::runNativeMediaTestStage(NativeMediaTestStage stage, bool al
 	if (nativeMediaTestStageHook_) {
 		nativeMediaTestStageHook_(stage, alpha, rtpTimestamp, mediaEpoch);
 	}
+}
+
+void VDONinjaSource::feedNativeMediaTestQueuedPacket(bool alpha, const std::vector<uint8_t> &packet)
+{
+	enqueueVideoPacket(alpha, packet.data(), packet.size(), mediaEpochGate_.capture());
+}
+
+std::pair<size_t, uint64_t> VDONinjaSource::nativeMediaTestReceiveQueueStats()
+{
+	std::lock_guard<std::mutex> lock(videoReceiveMutex_);
+	return {videoReceiveQueue_.bytes(), videoReceiveQueue_.drops()};
 }
 
 void VDONinjaSource::feedNativeMediaTestVp9AccessUnit(bool alpha, const std::vector<uint8_t> &accessUnit,
@@ -1118,6 +1131,7 @@ uint64_t VDONinjaSource::nativeMediaTestEpoch() const
 
 VDONinjaSource::~VDONinjaSource()
 {
+	stopVideoReceiveWorker();
 #if defined(VDONINJA_NATIVE_MEDIA_INTEGRATION_TEST)
 	// Test callbacks often reference collectors declared after this source.
 	// They are observation seams only and must not participate in teardown.
@@ -2719,7 +2733,7 @@ void VDONinjaSource::onVideoTrack(const PeerEventIdentity &identity, std::shared
 			}
 
 			const auto &packet = std::get<rtc::binary>(message);
-			self->processVideoRtpPacket(reinterpret_cast<const uint8_t *>(packet.data()), packet.size(), mediaEpoch);
+			self->enqueueVideoPacket(false, reinterpret_cast<const uint8_t *>(packet.data()), packet.size(), mediaEpoch);
 		});
 	});
 	if (replacedExistingTrack && safeRequestKeyframe(track, "video-track-replaced")) {
@@ -2841,7 +2855,7 @@ void VDONinjaSource::onAlphaVideoTrack(const PeerEventIdentity &identity, std::s
 				return;
 			}
 			const auto &packet = std::get<rtc::binary>(message);
-			self->processAlphaRtpPacket(reinterpret_cast<const uint8_t *>(packet.data()), packet.size(), mediaEpoch);
+			self->enqueueVideoPacket(true, reinterpret_cast<const uint8_t *>(packet.data()), packet.size(), mediaEpoch);
 		});
 	});
 	if (!peerTrackBundleAdoptionInProgress_.load(std::memory_order_acquire)) {
@@ -3105,6 +3119,125 @@ void VDONinjaSource::publishOutputDimensions(uint32_t width, uint32_t height)
 	outputDimensionsPacked_.store(packed, std::memory_order_release);
 }
 
+void VDONinjaSource::enqueueVideoPacket(bool alpha, const uint8_t *data, size_t size, uint64_t epoch)
+{
+	if (!nativeRunning_.load() || !mediaEpochGate_.isCurrent(epoch) || !parseRtpPayloadView(data, size))
+		return;
+	// Never wait for a decoder on the libdatachannel transport thread.
+	std::lock_guard<std::mutex> lock(videoReceiveMutex_);
+	if (videoReceiveStopping_ || !mediaEpochGate_.isCurrent(epoch))
+		return;
+	if (videoReceiveQueue_.push({std::vector<uint8_t>(data, data + size), epoch, os_gettime_ns(), alpha}))
+		videoReceiveCondition_.notify_one();
+}
+
+void VDONinjaSource::stopVideoReceiveWorker()
+{
+	{
+		std::lock_guard<std::mutex> lock(videoReceiveMutex_);
+		videoReceiveStopping_ = true;
+		videoReceiveQueue_.clear();
+	}
+	videoReceiveCondition_.notify_all();
+	if (videoReceiveThread_.joinable())
+		videoReceiveThread_.join();
+}
+
+void VDONinjaSource::requestReceiveKeyframes()
+{
+	const int64_t now = currentTimeMs();
+	const int64_t last = lastKeyframeRequestTime_.load();
+	if (last != 0 && now >= last && now - last < 1000)
+		return;
+	std::shared_ptr<rtc::Track> primary, alpha;
+	{
+		std::lock_guard<std::mutex> lock(nativeStateMutex_);
+		primary = videoTrack_;
+		alpha = alphaVideoTrack_;
+	}
+	lastKeyframeRequestTime_.store(now);
+	safeRequestKeyframe(primary, "receive-recovery");
+	safeRequestKeyframe(alpha, "receive-recovery-alpha");
+}
+
+void VDONinjaSource::recoverVideoReceive(uint64_t epoch)
+{
+	{
+		// Same lock order as track replacement. Do not advance the track epoch:
+		// already queued packets belong to these same tracks and RTP clocks.
+		std::unique_lock<std::mutex> state(nativeStateMutex_);
+		if (!mediaEpochGate_.isCurrent(epoch))
+			return;
+		std::unique_lock<std::mutex> assembly(videoAssemblyMutex_);
+		std::unique_lock<std::mutex> decode(videoDecodeMutex_);
+		std::unique_lock<std::mutex> alphaAssembly(alphaAssemblyMutex_);
+		std::unique_lock<std::mutex> alphaDecode(alphaDecodeMutex_);
+		std::unique_lock<std::mutex> output(videoOutputMutex_);
+		std::unique_lock<std::mutex> pairing(alphaPairingMutex_);
+		videoAssemblyBuffer_.clear();
+		alphaAssemblyBuffer_.clear();
+		videoAssemblyActive_ = alphaAssemblyActive_ = false;
+		if (videoDecoder_)
+			avcodec_flush_buffers(videoDecoder_);
+		if (alphaDecoder_)
+			avcodec_flush_buffers(alphaDecoder_);
+		videoWaitingForKeyframe_ = alphaWaitingForKeyframe_ = true;
+		alphaFrameSynchronizer_.reset();
+		videoTimestampMapper_.reset();
+	}
+	requestReceiveKeyframes();
+}
+
+void VDONinjaSource::videoReceiveLoop()
+{
+	uint64_t epoch = 0;
+	std::optional<uint16_t> sequences[2];
+	uint64_t lastWarningNs = 0;
+	for (;;) {
+		std::optional<VideoReceiveQueue::Packet> packet;
+		{
+			std::unique_lock<std::mutex> lock(videoReceiveMutex_);
+			videoReceiveCondition_.wait(lock,
+			                            [this] { return videoReceiveStopping_ || videoReceiveQueue_.size() != 0; });
+			if (videoReceiveStopping_)
+				return;
+			packet = videoReceiveQueue_.pop(os_gettime_ns());
+		}
+		if (!packet || !nativeRunning_.load() || !mediaEpochGate_.isCurrent(packet->epoch))
+			continue;
+		runNoexceptCallback("native_video_receive_worker", [&] {
+			if (epoch != packet->epoch) {
+				epoch = packet->epoch;
+				sequences[0].reset();
+				sequences[1].reset();
+			}
+			const auto *header = reinterpret_cast<const rtc::RtpHeader *>(packet->data.data());
+			const uint16_t sequence = header->seqNumber();
+			auto &previous = sequences[packet->alpha ? 1 : 0];
+			if (!packet->discontinuity && previous && static_cast<int16_t>(sequence - *previous) <= 0)
+				return; // late retransmission or duplicate; never decode it twice
+			const bool gap = previous && static_cast<uint16_t>(sequence - *previous) != 1;
+			if (packet->discontinuity || gap) {
+				recoverVideoReceive(epoch);
+				if (packet->discontinuity) {
+					sequences[0].reset();
+					sequences[1].reset();
+					const uint64_t now = os_gettime_ns();
+					if (now - lastWarningNs > 5000000000ULL) {
+						logWarning("Native video receive backlog discarded; recovering at fresh keyframes");
+						lastWarningNs = now;
+					}
+				}
+			}
+			previous = sequence;
+			if (packet->alpha)
+				processAlphaRtpPacket(packet->data.data(), packet->data.size(), epoch);
+			else
+				processVideoRtpPacket(packet->data.data(), packet->data.size(), epoch);
+		});
+	}
+}
+
 void VDONinjaSource::processVideoData(const uint8_t *data, size_t size, uint32_t rtpTimestamp, uint64_t mediaEpoch)
 {
 	if (!nativeRunning_.load() || !data || size == 0 || !mediaEpochGate_.isCurrent(mediaEpoch)) {
@@ -3136,6 +3269,11 @@ void VDONinjaSource::processVideoData(const uint8_t *data, size_t size, uint32_t
 		std::lock_guard<std::mutex> lock(videoDecodeMutex_);
 		if (!mediaEpochGate_.isCurrent(mediaEpoch)) {
 			return;
+		}
+		if (videoWaitingForKeyframe_) {
+			if (!(codec == NativeVideoCodec::VP9 ? isVp9Keyframe(data, size) : isH264Keyframe(data, size)))
+				return;
+			videoWaitingForKeyframe_ = false;
 		}
 		if (!initializeVideoDecoder()) {
 			return;
@@ -3357,6 +3495,13 @@ void VDONinjaSource::processVideoRtpPacket(const uint8_t *packetData, size_t pac
 			videoAssemblyTimestamp_ = rtpHeader->timestamp();
 		}
 
+		// Bound incomplete H.264 access units as well as VP9 and queued RTP.
+		// STAP-A adds at most two start-code bytes per input byte.
+		if (videoAssemblyBuffer_.size() + payloadSize * 2 + 4 > VideoReceiveQueue::maxBytes) {
+			videoAssemblyBuffer_.clear();
+			videoAssemblyActive_ = false;
+			return;
+		}
 		if (!appendPayload(videoAssemblyBuffer_)) {
 			return;
 		}
@@ -3423,6 +3568,12 @@ void VDONinjaSource::processVP9RtpPacket(const uint8_t *payload, size_t payloadS
 			return;
 		}
 
+		if (videoAssemblyTimestamp_ != rtpTimestamp ||
+		    videoAssemblyBuffer_.size() + vpSize > VideoReceiveQueue::maxBytes) {
+			videoAssemblyBuffer_.clear();
+			videoAssemblyActive_ = false;
+			return;
+		}
 		videoAssemblyBuffer_.insert(videoAssemblyBuffer_.end(), vpData, vpData + vpSize);
 
 		if (desc.endOfFrame && !videoAssemblyBuffer_.empty()) {
@@ -3506,6 +3657,12 @@ void VDONinjaSource::processAlphaVP9RtpPacket(const uint8_t *payload, size_t pay
 			return;
 		}
 
+		if (alphaAssemblyTimestamp_ != rtpTimestamp ||
+		    alphaAssemblyBuffer_.size() + vpSize > VideoReceiveQueue::maxBytes) {
+			alphaAssemblyBuffer_.clear();
+			alphaAssemblyActive_ = false;
+			return;
+		}
 		alphaAssemblyBuffer_.insert(alphaAssemblyBuffer_.end(), vpData, vpData + vpSize);
 
 		if (desc.endOfFrame && !alphaAssemblyBuffer_.empty()) {
@@ -3882,6 +4039,7 @@ void VDONinjaSource::resetMediaPipelineStateLocked()
 	videoAssemblyBuffer_.clear();
 	videoAssemblyTimestamp_ = 0;
 	videoAssemblyActive_ = false;
+	videoWaitingForKeyframe_ = alphaWaitingForKeyframe_ = false;
 	alphaAssemblyBuffer_.clear();
 	alphaAssemblyTimestamp_ = 0;
 	alphaAssemblyActive_ = false;
@@ -3953,6 +4111,11 @@ void VDONinjaSource::processAlphaVideoData(const uint8_t *data, size_t size, uin
 	std::unique_lock<std::mutex> lock(alphaDecodeMutex_);
 	if (!mediaEpochGate_.isCurrent(mediaEpoch)) {
 		return;
+	}
+	if (alphaWaitingForKeyframe_) {
+		if (!isVp9Keyframe(data, size))
+			return;
+		alphaWaitingForKeyframe_ = false;
 	}
 	if (!initializeAlphaDecoder()) {
 		return;
