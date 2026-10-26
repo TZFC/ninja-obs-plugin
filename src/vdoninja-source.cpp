@@ -2733,7 +2733,8 @@ void VDONinjaSource::onVideoTrack(const PeerEventIdentity &identity, std::shared
 			}
 
 			const auto &packet = std::get<rtc::binary>(message);
-			self->enqueueVideoPacket(false, reinterpret_cast<const uint8_t *>(packet.data()), packet.size(), mediaEpoch);
+			self->enqueueVideoPacket(false, reinterpret_cast<const uint8_t *>(packet.data()), packet.size(),
+			                         mediaEpoch);
 		});
 	});
 	if (replacedExistingTrack && safeRequestKeyframe(track, "video-track-replaced")) {

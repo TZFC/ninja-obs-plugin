@@ -65,8 +65,15 @@ std::optional<uint64_t> RtpOutputTimestampMapper::map(uint32_t rtpTimestamp, uin
 	// from a much newer GOP. Anchoring both to the cached frame's arrival
 	// would schedule live video seconds ahead and perturb OBS audio timing.
 	// Retain ordinary burst spacing, but rebase implausibly future media.
+	// Likewise, rebase if media falls too far behind wall clock (e.g. after
+	// network stalls or pauses) to eliminate cumulative lag buildup.
 	constexpr uint64_t maxFutureNs = 250000000ULL;
+	constexpr uint64_t maxPastNs = 250000000ULL;
 	if (mapped > nowNs && mapped - nowNs > maxFutureNs) {
+		mapped = std::max(nowNs, lastTimestampNs_ + 1);
+		baseTimestampNs_ = mapped;
+		extendedRtpTicks_ = 0;
+	} else if (nowNs > mapped && nowNs - mapped > maxPastNs) {
 		mapped = std::max(nowNs, lastTimestampNs_ + 1);
 		baseTimestampNs_ = mapped;
 		extendedRtpTicks_ = 0;
