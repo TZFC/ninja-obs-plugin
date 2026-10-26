@@ -567,3 +567,63 @@ TEST(AlphaSyncTest, PastTimestampRebaseEliminatesLagBuildup)
 	EXPECT_EQ(mapper.map(4500, stallArrivalNs + 16666666ULL), stallArrivalNs + 1000000000ULL / 60);
 }
 
+TEST(AlphaSyncTest, PastTimestampRebasePreservesOrdinaryDelayAndAdvancingClocks)
+{
+	constexpr uint64_t base = 10000000000ULL;
+	for (uint32_t rate : {90000u, 48000u}) {
+		RtpOutputTimestampMapper mapper;
+		ASSERT_EQ(mapper.map(0, base, rate), base);
+		// Exactly 250 ms behind is ordinary delay, not a discontinuity.
+		EXPECT_EQ(mapper.map(rate / 50, base + 270000000ULL, rate), base + 20000000ULL);
+		EXPECT_EQ(mapper.map(rate / 25, base + 290000001ULL, rate), base + 290000001ULL);
+		mapper.reset();
+		ASSERT_EQ(mapper.map(0, base, rate), base);
+		// A normal sender advances its RTP clock while no packets are delivered.
+		EXPECT_EQ(mapper.map(rate * 2, base + 2000000000ULL, rate), base + 2000000000ULL);
+	}
+}
+
+TEST(AlphaSyncTest, RepeatedPausedClocksRecoverAudioAndVideoWithoutAccumulatingOffset)
+{
+	RtpOutputTimestampMapper video, audio;
+	uint64_t now = 10000000000ULL;
+	uint64_t previousVideo = now, previousAudio = now;
+	uint32_t videoTicks = 0, audioTicks = 0;
+	ASSERT_EQ(video.map(videoTicks, now), now);
+	ASSERT_EQ(audio.map(audioTicks, now, 48000), now);
+	for (int cycle = 0; cycle < 6; ++cycle) {
+		now += 1500000000ULL;
+		// Both streams resume from frozen media time on the same 20 ms boundary.
+		videoTicks += 1800;
+		audioTicks += 960;
+		const auto v = video.map(videoTicks, now);
+		const auto a = audio.map(audioTicks, now, 48000);
+		ASSERT_TRUE(v);
+		ASSERT_TRUE(a);
+		EXPECT_EQ(*v, now);
+		EXPECT_EQ(*a, now);
+		EXPECT_GT(*v, previousVideo);
+		EXPECT_GT(*a, previousAudio);
+		for (int frame = 0; frame < 20; ++frame) {
+			now += 20000000ULL;
+			videoTicks += 1800;
+			audioTicks += 960;
+			EXPECT_EQ(video.map(videoTicks, now), now);
+			EXPECT_EQ(audio.map(audioTicks, now, 48000), now);
+		}
+		previousVideo = previousAudio = now;
+	}
+}
+
+TEST(AlphaSyncTest, PastRebaseAcrossRolloverStillRejectsDuplicateAndOldFrames)
+{
+	RtpOutputTimestampMapper mapper;
+	constexpr uint64_t base = 10000000000ULL;
+	constexpr uint32_t beforeWrap = 0xfffffff0u;
+	ASSERT_EQ(mapper.map(beforeWrap, base), base);
+	EXPECT_FALSE(mapper.map(beforeWrap, base + 1500000000ULL));
+	EXPECT_FALSE(mapper.map(beforeWrap - 1, base + 1500000000ULL));
+	EXPECT_EQ(mapper.map(0x10u, base + 1500000000ULL), base + 1500000000ULL);
+	EXPECT_FALSE(mapper.map(beforeWrap, base + 1500000001ULL));
+	EXPECT_EQ(mapper.map(0x10u + 1800, base + 1520000000ULL), base + 1520000000ULL);
+}
