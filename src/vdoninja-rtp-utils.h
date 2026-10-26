@@ -51,10 +51,18 @@ struct Vp9DescriptorResult {
 // On success, the VP9 bitstream data begins at payload[result.payloadOffset].
 Vp9DescriptorResult parseVP9PayloadDescriptor(const uint8_t *payload, size_t size);
 
+// Inspect the encoded access unit, never the sender's RTP prediction flag.
+bool isVp9Keyframe(const uint8_t *data, size_t size);
+bool isH264Keyframe(const uint8_t *data, size_t size);
+
 // True when at least one clock-second of RTP time has elapsed since the last
 // sender report. RTP timestamps wrap, so the comparison is made on a wrapped
 // delta; a timestamp that moved backwards is never treated as due.
 bool isRtcpSenderReportDue(uint32_t currentTimestamp, uint32_t lastReportedTimestamp, uint32_t clockRate);
+
+// Preserve forward RTP time across 32-bit rollover. Only duplicate/backward
+// encoder timestamps need the fallback step; first timestamps are unchanged.
+uint32_t sanitizeMonotonicTimestamp(uint32_t candidate, bool &hasLast, uint32_t &last, uint32_t fallbackStep);
 
 // Build one RFC 3550 RTP packet carrying an already-encoded Opus payload.
 // The caller owns sequence/timestamp state so it can preserve continuity

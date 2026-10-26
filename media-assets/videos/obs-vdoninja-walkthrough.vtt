@@ -1,0 +1,20 @@
+WEBVTT
+
+00:00:00.000 --> 00:00:07.100
+OBS receives the live Game Capture feed through a VDO.Ninja Source.
+
+00:00:07.100 --> 00:00:13.800
+Source properties select the stream ID and the experimental native receiver.
+
+00:00:13.800 --> 00:00:20.000
+The VDO.Ninja Studio dock adds publish controls and shareable viewer links.
+
+00:00:20.000 --> 00:00:32.600
+Go Live publishes the OBS program to a second VDO.Ninja stream.
+
+00:00:32.600 --> 00:00:42.400
+A browser viewer is receiving moving video; the dock reports the active
+connection.
+
+00:00:42.400 --> 00:00:47.470
+Stop ends OBS publishing. The independent incoming source continues playing.

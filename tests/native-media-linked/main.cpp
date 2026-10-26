@@ -5521,6 +5521,103 @@ void testSymmetricOwnershipAndDeferredAdoption()
 	        "retired peer A could re-enter adopted peer B media ownership");
 }
 
+void testIngressPredictionRecovery(const std::vector<std::vector<uint8_t>> &gop)
+{
+	std::atomic<int> corruptSubmissions{0};
+	std::atomic<uint32_t> latest{0};
+	VDONinjaSource source(NativeMediaTestTag{});
+	source.transitionNativeMediaTestPipeline(false);
+	source.setNativeMediaTestVideoDecoderHooks(
+	    [&](AVCodecContext *decoder, const AVPacket *packet) {
+		    if (packet->pts >= 30000 && packet->pts < 60000)
+			    ++corruptSubmissions;
+		    return avcodec_send_packet(decoder, packet);
+	    },
+	    {});
+	source.setNativeMediaTestOutputHook([&](NativeMediaTestOutput frame) { latest = frame.rtpTimestamp; });
+	uint16_t sequence = 65530; // also exercise wrap
+	const auto feed = [&](size_t index, uint32_t timestamp) {
+		std::vector<uint8_t> packet(13 + gop[index].size());
+		packet[0] = 0x80;
+		packet[1] = 0xe0;
+		packet[2] = uint8_t(sequence >> 8);
+		packet[3] = uint8_t(sequence++);
+		packet[4] = uint8_t(timestamp >> 24);
+		packet[5] = uint8_t(timestamp >> 16);
+		packet[6] = uint8_t(timestamp >> 8);
+		packet[7] = uint8_t(timestamp);
+		// Deliberately leave P=0 even on deltas: recovery must inspect the AU.
+		packet[12] = 0x0c;
+		std::copy(gop[index].begin(), gop[index].end(), packet.begin() + 13);
+		source.feedNativeMediaTestQueuedPacket(false, packet);
+		std::this_thread::sleep_for(5ms);
+	};
+	for (size_t i = 0; i < 8; ++i)
+		feed(i, uint32_t(i + 1) * 3000);
+	++sequence; // lost RTP packet breaks the prediction chain
+	for (size_t i = 9; i < 16; ++i)
+		feed(i, uint32_t(i + 1) * 3000);
+	for (size_t i = 0; i < gop.size(); ++i)
+		feed(i, 60000 + uint32_t(i) * 3000);
+	requireEventually([&] { return latest.load() > 60000; }, "VP9 GOP did not recover after packet loss");
+	require(corruptSubmissions.load() == 0, "submitted dependent VP9 frames after losing their reference");
+}
+
+void testBoundedVideoIngress(const std::vector<uint8_t> &primaryAu, const std::vector<uint8_t> &alphaAu)
+{
+	StageLatch latch(NativeMediaTestStage::PreDecode, false);
+	std::atomic<uint32_t> latest{0};
+	std::atomic<bool> badAlpha{false};
+	VDONinjaSource source(NativeMediaTestTag{});
+	source.transitionNativeMediaTestPipeline(true);
+	source.setNativeMediaTestStageHook(
+	    [&](auto stage, bool alpha, uint32_t ts, uint64_t epoch) { latch.hook(stage, alpha, ts, epoch); });
+	source.setNativeMediaTestOutputHook([&](NativeMediaTestOutput output) {
+		if (!output.hasAlpha)
+			badAlpha = true;
+		latest = output.rtpTimestamp;
+	});
+	struct ReleaseLatch {
+		StageLatch &latch;
+		~ReleaseLatch() { latch.release(); }
+	} release{latch};
+	uint16_t primarySeq = 0, alphaSeq = 0;
+	const auto feed = [&](bool alpha, uint32_t timestamp) {
+		const auto &au = alpha ? alphaAu : primaryAu;
+		std::vector<uint8_t> packet(13 + au.size());
+		packet[0] = 0x80;
+		packet[1] = 0x80 | (alpha ? 97 : 96);
+		auto &sequence = alpha ? alphaSeq : primarySeq;
+		packet[2] = uint8_t(sequence >> 8);
+		packet[3] = uint8_t(sequence++);
+		packet[4] = uint8_t(timestamp >> 24);
+		packet[5] = uint8_t(timestamp >> 16);
+		packet[6] = uint8_t(timestamp >> 8);
+		packet[7] = uint8_t(timestamp);
+		packet[12] = 0x0c;
+		std::copy(au.begin(), au.end(), packet.begin() + 13);
+		source.feedNativeMediaTestQueuedPacket(alpha, packet);
+	};
+	feed(false, 3000);
+	latch.waitUntilEntered();
+	// A blocked decoder must not block ingress or accumulate unbounded packets.
+	for (uint32_t i = 2; i < 6002; ++i)
+		feed(i % 2 != 0, i * 3000);
+	const auto stats = source.nativeMediaTestReceiveQueueStats();
+	require(stats.first <= VideoReceiveQueue::maxBytes, "video ingress exceeded byte cap");
+	require(stats.second > 0, "blocked decode never triggered ingress eviction");
+	latch.release();
+	// Simulate normal ongoing traffic after overload. Both tracks must recover
+	// with matching RTP timestamps, including frame-threaded decoder delay.
+	for (uint32_t i = 6002; i < 6050; ++i) {
+		feed(true, i * 3000);
+		feed(false, i * 3000);
+		std::this_thread::sleep_for(10ms);
+	}
+	requireEventually([&] { return latest.load() > 6002 * 3000; }, "receive worker did not recover fresh paired video");
+	require(!badAlpha.load(), "receive recovery lost transparency");
+}
+
 } // namespace
 
 int main(int argc, char **argv)
@@ -5664,6 +5761,9 @@ int main(int argc, char **argv)
 		    {"DataChannel snapshot rejects callback after source destruction",
 		     testDataChannelSnapshotRejectsCallbackAfterSourceDestruction},
 		    {"RTC manager-to-source ordering heavy repeat", testRtcTrackOrderingHeavyRepeat},
+		    {"bounded video ingress and transparent overload recovery",
+		     [&]() { testBoundedVideoIngress(primaryAu, alphaAu); }},
+		    {"video ingress VP9 prediction loss recovery", [&]() { testIngressPredictionRecovery(primaryGop); }},
 		    {"shipped decoder threading configuration",
 		     [&]() { testLinkedGateUsesShippedDecoderThreading(primaryAu, alphaAu); }},
 		    {"frame-thread delayed decode preserves originating RTP PTS",

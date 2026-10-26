@@ -10,6 +10,7 @@
 #include <QScrollArea>
 #include <QSizePolicy>
 #include <QSpinBox>
+#include <QTabWidget>
 #include <QToolButton>
 #include <QVBoxLayout>
 #include <cstring>
@@ -18,8 +19,10 @@
 #include <util/config-file.h>
 
 #include "plugin-main.h"
+#include "vdoninja-guest-return-widget.h"
 #include "vdoninja-output.h"
 #include "vdoninja-publish-obs.h"
+#include "vdoninja-update-checker.h"
 #include "vdoninja-utils.h"
 
 namespace vdoninja
@@ -39,6 +42,11 @@ VDONinjaDock::VDONinjaDock(QWidget *parent) : QDockWidget(parent)
 
 	setupUi();
 	loadSettings();
+	char *cachePath = obs_module_config_path("update-check.ini");
+	updateChecker_ = new VDONinjaUpdateChecker(PLUGIN_VERSION, QString::fromUtf8(cachePath ? cachePath : ""), this);
+	bfree(cachePath);
+	connect(updateChecker_, &VDONinjaUpdateChecker::statusChanged, this, &VDONinjaDock::updateVersionStatus);
+	updateVersionStatus();
 
 	statsTimer = new QTimer(this);
 	connect(statsTimer, &QTimer::timeout, this, &VDONinjaDock::updateStats);
@@ -56,6 +64,9 @@ VDONinjaDock::~VDONinjaDock() {}
 
 void VDONinjaDock::shutdown()
 {
+	stopGuestReturn();
+	if (updateChecker_)
+		updateChecker_->shutdown();
 	saveSettings();
 	if (statsTimer) {
 		statsTimer->stop();
@@ -63,6 +74,12 @@ void VDONinjaDock::shutdown()
 	if (chatClearTimer) {
 		chatClearTimer->stop();
 	}
+}
+
+void VDONinjaDock::stopGuestReturn()
+{
+	if (guestReturn_)
+		guestReturn_->stop();
 }
 
 void VDONinjaDock::setupUi()
@@ -232,11 +249,64 @@ void VDONinjaDock::setupUi()
 
 	layout->addStretch();
 	scrollArea->setWidget(container);
-	setWidget(scrollArea);
+	auto *tabs = new QTabWidget(this);
+	tabs->addTab(scrollArea, obs_module_text_vdo("VDONinja.Dock.PublishTab"));
+	auto *returnScroll = new QScrollArea(tabs);
+	returnScroll->setWidgetResizable(true);
+	returnScroll->setFrameShape(QFrame::NoFrame);
+	returnScroll->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
+	auto *returnPage = new QWidget(returnScroll);
+	auto *returnLayout = new QVBoxLayout(returnPage);
+	guestReturn_ = new GuestReturnWidget(returnPage);
+	returnLayout->addWidget(guestReturn_);
+	returnLayout->addStretch();
+	returnScroll->setWidget(returnPage);
+	tabs->addTab(returnScroll, obs_module_text_vdo("GuestReturn.Title"));
+
+	// Keep the version visible even when the session settings need scrolling.
+	QWidget *body = new QWidget(this);
+	QVBoxLayout *bodyLayout = new QVBoxLayout(body);
+	bodyLayout->setContentsMargins(0, 0, 0, 0);
+	bodyLayout->addWidget(tabs, 1);
+	lblVersion = new QLabel(body);
+	lblVersion->setObjectName("VDONinjaVersionStatus");
+	lblVersion->setTextFormat(Qt::RichText);
+	lblVersion->setWordWrap(true);
+	lblVersion->setAlignment(Qt::AlignCenter);
+	lblVersion->setMargin(6);
+	lblVersion->setTextInteractionFlags(Qt::TextBrowserInteraction);
+	lblVersion->setOpenExternalLinks(true);
+	bodyLayout->addWidget(lblVersion);
+	setWidget(body);
+}
+
+void VDONinjaDock::updateVersionStatus()
+{
+	const auto &result = updateChecker_->result();
+	QString status;
+	switch (result.status) {
+	case UpdateCheckStatus::Checking:
+		status = obs_module_text_vdo("VDONinja.Update.Checking");
+		break;
+	case UpdateCheckStatus::UpToDate:
+		status = obs_module_text_vdo("VDONinja.Update.UpToDate");
+		break;
+	case UpdateCheckStatus::UpdateAvailable:
+		status = QString::fromUtf8(obs_module_text_vdo("VDONinja.Update.Available")).arg(result.latestVersion);
+		break;
+	case UpdateCheckStatus::Unavailable:
+		status = obs_module_text_vdo("VDONinja.Update.Unavailable");
+		break;
+	}
+	lblVersion->setText(QStringLiteral("VDO.Ninja v%1<br>%2 &middot; <a href=\"%3\">%4</a>")
+	                        .arg(QString::fromUtf8(PLUGIN_VERSION).toHtmlEscaped(), status.toHtmlEscaped(),
+	                             QString::fromUtf8(kPluginReleasesUrl),
+	                             QString::fromUtf8(obs_module_text_vdo("VDONinja.Update.Releases")).toHtmlEscaped()));
 }
 
 void VDONinjaDock::loadSettings()
 {
+	guestReturn_->loadSettings();
 	loadingSettings_ = true;
 	config_t *config = obs_frontend_get_profile_config();
 	if (!config) {

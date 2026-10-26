@@ -1,6 +1,6 @@
 cmake_minimum_required(VERSION 3.16)
 
-project(obs-vdoninja VERSION 1.1.73 LANGUAGES C CXX)
+project(obs-vdoninja VERSION 1.1.75 LANGUAGES C CXX)
 
 # Plugin configuration
 set(PLUGIN_AUTHOR "VDO.Ninja Community")
@@ -10,6 +10,7 @@ set(PLUGIN_LICENSE "AGPL-3.0-only")
 
 # Options
 option(BUILD_TESTS "Build unit tests" OFF)
+option(BUILD_UPDATE_CHECK_TESTS "Build update checker tests (requires Qt Core/Network and libcurl)" OFF)
 option(BUILD_PLUGIN "Build the OBS plugin (requires OBS SDK)" ON)
 option(BUNDLE_LINUX_RUNTIME "Bundle libdatachannel privately in Linux release packages" OFF)
 option(BUILD_PUBLISHER_TOOL "Build the VP9 alpha publisher test tool (requires BUILD_PLUGIN deps)" OFF)
@@ -47,6 +48,10 @@ if(BUILD_PLUGIN)
     if(NOT Qt6_FOUND)
         find_package(Qt5 COMPONENTS Widgets REQUIRED)
     endif()
+endif()
+
+if(BUILD_PLUGIN OR BUILD_UPDATE_CHECK_TESTS)
+    find_package(CURL REQUIRED)
 endif()
 
 if(BUILD_PLUGIN)
@@ -347,6 +352,9 @@ if(BUILD_PLUGIN)
         src/vdoninja-publish-settings.cpp
         src/vdoninja-network-settings.cpp
         src/vdoninja-dock.cpp
+        src/vdoninja-guest-return.cpp
+        src/vdoninja-guest-return-widget.cpp
+        src/vdoninja-update-checker.cpp
     )
 
     set(PLUGIN_HEADERS
@@ -379,6 +387,9 @@ if(BUILD_PLUGIN)
         src/vdoninja-utils.h
         src/vdoninja-video-keyframe-gate.h
         src/vdoninja-dock.h
+        src/vdoninja-guest-return.h
+        src/vdoninja-guest-return-widget.h
+        src/vdoninja-update-checker.h
     )
 
     # Create the plugin library
@@ -467,6 +478,8 @@ if(BUILD_PLUGIN)
     else()
         target_link_libraries(${PROJECT_NAME} PRIVATE Qt5::Widgets)
     endif()
+
+    target_link_libraries(${PROJECT_NAME} PRIVATE CURL::libcurl)
 
     # Link other dependencies
     target_link_libraries(${PROJECT_NAME} PRIVATE Threads::Threads)
@@ -684,8 +697,48 @@ if(BUILD_TESTS)
     add_dependencies(vdoninja-tests vdoninja-module-lifecycle-tests)
 
     include(GoogleTest)
+    add_executable(vdoninja-guest-return-tests
+        tests/test-guest-return.cpp
+        src/vdoninja-guest-return.cpp
+    )
+    target_include_directories(vdoninja-guest-return-tests BEFORE PRIVATE
+        ${CMAKE_CURRENT_SOURCE_DIR}/tests/guest-return-stubs
+        ${CMAKE_CURRENT_SOURCE_DIR}/src
+    )
+    target_link_libraries(vdoninja-guest-return-tests PRIVATE vdoninja-testable GTest::gtest_main)
+    add_dependencies(vdoninja-tests vdoninja-guest-return-tests)
+    gtest_discover_tests(vdoninja-guest-return-tests TEST_PREFIX "GuestReturn.")
     gtest_discover_tests(vdoninja-tests)
     gtest_discover_tests(vdoninja-module-lifecycle-tests TEST_PREFIX "ModuleBoundary.")
+
+    if(BUILD_UPDATE_CHECK_TESTS)
+        if(NOT BUILD_PLUGIN)
+            find_package(Qt6 COMPONENTS Core Network QUIET)
+            if(NOT Qt6_FOUND)
+                find_package(Qt5 COMPONENTS Core Network REQUIRED)
+            endif()
+        elseif(Qt6_FOUND)
+            find_package(Qt6 COMPONENTS Network REQUIRED)
+        else()
+            find_package(Qt5 COMPONENTS Network REQUIRED)
+        endif()
+        add_executable(vdoninja-update-check-tests
+            tests/test-update-checker.cpp
+            tests/test-update-checker-network.cpp
+            src/vdoninja-update-checker.cpp
+            src/vdoninja-update-checker.h
+        )
+        set_target_properties(vdoninja-update-check-tests PROPERTIES AUTOMOC ON)
+        target_include_directories(vdoninja-update-check-tests PRIVATE src)
+        target_link_libraries(vdoninja-update-check-tests PRIVATE GTest::gtest_main CURL::libcurl)
+        if(Qt6_FOUND)
+            target_link_libraries(vdoninja-update-check-tests PRIVATE Qt6::Core Qt6::Network)
+        else()
+            target_link_libraries(vdoninja-update-check-tests PRIVATE Qt5::Core Qt5::Network)
+        endif()
+        add_dependencies(vdoninja-tests vdoninja-update-check-tests)
+        gtest_discover_tests(vdoninja-update-check-tests)
+    endif()
 endif()
 
 # ---------------------------------------------------------------------------

@@ -8,6 +8,7 @@
 #include <obs-module.h>
 
 #include <atomic>
+#include <condition_variable>
 #include <deque>
 #include <functional>
 #include <thread>
@@ -17,6 +18,7 @@
 #include "vdoninja-common.h"
 #include "vdoninja-data-channel.h"
 #include "vdoninja-peer-manager.h"
+#include "vdoninja-receive-queue.h"
 #include "vdoninja-reliability.h"
 #include "vdoninja-signaling.h"
 
@@ -158,6 +160,8 @@ public:
 	                                         NativeMediaTestReceiveFrameHook receiveHook);
 	void setNativeMediaTestAlphaDecoderHooks(NativeMediaTestSendPacketHook sendHook,
 	                                         NativeMediaTestReceiveFrameHook receiveHook);
+	void feedNativeMediaTestQueuedPacket(bool alpha, const std::vector<uint8_t> &packet);
+	std::pair<size_t, uint64_t> nativeMediaTestReceiveQueueStats();
 	void feedNativeMediaTestVp9AccessUnit(bool alpha, const std::vector<uint8_t> &accessUnit, uint32_t rtpTimestamp);
 	void feedNativeMediaTestVp9Packet(bool alpha, const std::vector<uint8_t> &payload, uint32_t rtpTimestamp,
 	                                  bool startOfFrame, bool endOfFrame);
@@ -240,6 +244,11 @@ private:
 	                          const std::shared_ptr<rtc::Track> &track);
 	void removePendingPeerTrackLocked(const TrackSlotEvent &event);
 	std::optional<PeerEventIdentity> adoptNextPendingPeerBundleIfOwnerless(const char *reason);
+	void enqueueVideoPacket(bool alpha, const uint8_t *data, size_t size, uint64_t epoch);
+	void videoReceiveLoop();
+	void stopVideoReceiveWorker();
+	void recoverVideoReceive(uint64_t epoch);
+	void requestReceiveKeyframes();
 	void processVideoRtpPacket(const uint8_t *packetData, size_t packetSize, uint64_t mediaEpoch);
 	void processVP9RtpPacket(const uint8_t *payload, size_t payloadSize, uint32_t rtpTimestamp, uint64_t mediaEpoch);
 	void processAlphaRtpPacket(const uint8_t *packetData, size_t packetSize, uint64_t mediaEpoch);
@@ -399,6 +408,13 @@ private:
 	};
 	std::unordered_map<std::string, std::unordered_map<uint64_t, PeerControlState>>
 	    peerControlStates_; // Guarded by videoCommitStateMutex_.
+	std::thread videoReceiveThread_;
+	std::mutex videoReceiveMutex_;
+	std::condition_variable videoReceiveCondition_;
+	VideoReceiveQueue videoReceiveQueue_;
+	bool videoReceiveStopping_ = false;
+	bool videoWaitingForKeyframe_ = false; // guarded by videoDecodeMutex_
+	bool alphaWaitingForKeyframe_ = false; // guarded by alphaDecodeMutex_
 	std::mutex videoAssemblyMutex_;
 	std::mutex videoDecodeMutex_;
 	std::mutex alphaAssemblyMutex_;

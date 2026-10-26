@@ -2081,6 +2081,11 @@ static void open_vdoninja_studio_callback(void *)
 static void frontend_event_callback(enum obs_frontend_event event, void *)
 {
 	switch (event) {
+	case OBS_FRONTEND_EVENT_PROFILE_CHANGING:
+	case OBS_FRONTEND_EVENT_SCENE_COLLECTION_CHANGING:
+		if (g_vdo_dock)
+			g_vdo_dock->stopGuestReturn();
+		break;
 	case OBS_FRONTEND_EVENT_STREAMING_STARTING:
 		if (g_vdo_dock)
 			g_vdo_dock->prepareStreaming();

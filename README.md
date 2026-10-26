@@ -5,6 +5,8 @@
 
 Native OBS Studio plugin for [VDO.Ninja](https://vdo.ninja), with WebRTC publishing and ingest paths integrated directly into OBS workflows.
 
+[Screenshots and demo videos](media-assets/README.md) | [Machine-readable media manifest](media-assets/manifest.json)
+
 ## What Is VDO.Ninja?
 
 VDO.Ninja is a low-latency WebRTC platform used for live production, remote guests, room-based contribution, and browser-based return feeds. It is commonly used with OBS, often via Browser Sources and links like:
@@ -24,6 +26,14 @@ VDO.Ninja is a low-latency WebRTC platform used for live production, remote gues
 - Web quick start (post-install): [GitHub Pages Quick Start](https://steveseguin.github.io/ninja-obs-plugin/#quick-start)
 - First-run usage guide: [QUICKSTART.md](QUICKSTART.md)
 - Full docs: [README Quick Start](#quick-start)
+
+Open **Tools -> VDO.Ninja Studio** to see the installed plugin version in the dock footer.
+The plugin quietly checks GitHub for a stable release once a day, with the last check
+remembered across OBS restarts. The footer shows **You're up to date**, **New version
+available**, or **Update check unavailable** if the check fails. Prereleases do not
+trigger update notices. **Releases** opens the GitHub releases page in your browser;
+there are no update popups, automatic downloads, or automatic installs.
+
 Choose the package that matches the installed OBS version:
 
 | Platform | OBS version | Release package |
@@ -133,7 +143,7 @@ Portable OBS note: if launching from terminal, start `obs64.exe` from `bin\64bit
    - Compact: `<StreamID>|<Password>|<RoomID>|<Salt>|<WSS_URL>`
 6. Click `Start Streaming`
 
-Studio note: `Go Live`/`Stop` use the same OBS `Start Streaming`/`Stop Streaming` pipeline and active stream slot. They are not a second parallel output path. If you configured advanced service options, save them under `Settings -> Stream` and use OBS `Start Streaming`; Studio `Go Live` rebuilds the service from the dock's basic fields and default advanced values.
+Studio note: `Go Live`/`Stop` use the same OBS `Start Streaming`/`Stop Streaming` pipeline and active stream slot. The separate **Guest Return** controls send the program through an independent H.264/Opus output while a normal public stream continues. Select a return audio track that excludes the guest in OBS's Advanced Audio Properties; see [the guest-return setup](QUICKSTART.md#guest-return-alongside-a-public-stream). If you configured advanced service options, save them under `Settings -> Stream` and use OBS `Start Streaming`; Studio `Go Live` rebuilds the service from the dock's basic fields and default advanced values.
 
 The plugin parses stream-key URLs like:
 

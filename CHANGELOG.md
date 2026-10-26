@@ -7,6 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.1.75] - 2026-10-18
+
+- Add a separate Guest Return tab in VDO.Ninja Studio to send the full OBS program and a selected audio track while the normal public stream and recording continue independently.
+- Save return settings per profile, provide an active-session viewer link, and stop the return when changing profiles or scene collections or closing OBS.
+- Complete the output stop sequence when canceling a connection before media capture starts.
+- Document the single-guest mix-minus setup: include the guest on the public track and exclude them from the return track in Advanced Audio Properties. Audio routing remains manual; the return uses a separate H.264/Opus encoder pair.
+
+## [1.1.74] - 2026-10-06
+
+- Show the installed plugin version and a quiet daily stable-release update check in the VDO.Ninja Studio dock, with a link to GitHub releases. Prereleases do not trigger update notices.
+
 ## [1.1.73] - 2026-10-04
 
 - Omit blank/default signaling servers from generated links and use `wss2` for custom servers.

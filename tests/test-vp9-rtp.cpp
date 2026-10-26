@@ -11,9 +11,60 @@
 
 #include <gtest/gtest.h>
 
+#include "vdoninja-receive-queue.h"
 #include "vdoninja-rtp-utils.h"
 
 using namespace vdoninja;
+
+TEST(VideoReceiveQueueTest, BoundsBytesAndMarksRecoveryBeforeDeliveringNewPackets)
+{
+	VideoReceiveQueue queue;
+	for (int i = 0; i < 5; ++i)
+		ASSERT_TRUE(queue.push({std::vector<uint8_t>(1024 * 1024), 1, 10, i % 2 != 0}));
+	EXPECT_EQ(queue.bytes(), 1024u * 1024u);
+	EXPECT_EQ(queue.drops(), 4u);
+	const auto packet = queue.pop(10);
+	ASSERT_TRUE(packet);
+	EXPECT_TRUE(packet->discontinuity);
+	EXPECT_EQ(queue.bytes(), 0u);
+}
+
+TEST(VideoReceiveQueueTest, ExpiresAtConsumptionEvenWhenSenderStops)
+{
+	VideoReceiveQueue queue;
+	ASSERT_TRUE(queue.push({{1, 2}, 1, 10, false}));
+	EXPECT_FALSE(queue.pop(11 + VideoReceiveQueue::maxAgeNs));
+	ASSERT_TRUE(queue.push({{3}, 1, 12 + VideoReceiveQueue::maxAgeNs, true}));
+	ASSERT_TRUE(queue.pop(12 + VideoReceiveQueue::maxAgeNs)->discontinuity);
+}
+
+TEST(VideoReceiveQueueTest, BoundsTinyPacketsAndRejectsRetiredEpochs)
+{
+	VideoReceiveQueue queue;
+	for (size_t i = 0; i <= VideoReceiveQueue::maxPackets; ++i)
+		ASSERT_TRUE(queue.push({{1}, 2, 10, false}));
+	EXPECT_EQ(queue.size(), 1u);
+	EXPECT_EQ(queue.drops(), VideoReceiveQueue::maxPackets);
+	EXPECT_FALSE(queue.push({{2}, 1, 10, true}));
+	ASSERT_TRUE(queue.push({{3}, 3, 10, true}));
+	EXPECT_EQ(queue.size(), 1u);
+	EXPECT_EQ(queue.pop(10)->epoch, 3u);
+}
+
+TEST(VideoRecoveryTest, RequiresEncodedKeyframesRatherThanRtpPredictionClaims)
+{
+	const uint8_t key[] = {0x82, 0x49, 0x83, 0x42};
+	const uint8_t delta[] = {0x86, 0x49, 0x83, 0x42};
+	const uint8_t existing[] = {0x88, 0x49, 0x83, 0x42};
+	EXPECT_TRUE(isVp9Keyframe(key, sizeof(key)));
+	EXPECT_FALSE(isVp9Keyframe(key, 3));
+	EXPECT_FALSE(isVp9Keyframe(delta, sizeof(delta)));
+	EXPECT_FALSE(isVp9Keyframe(existing, sizeof(existing)));
+	const uint8_t idr[] = {0, 0, 0, 1, 0x67, 2, 0, 0, 1, 0x65, 3};
+	const uint8_t inter[] = {0, 0, 1, 0x41, 3};
+	EXPECT_TRUE(isH264Keyframe(idr, sizeof(idr)));
+	EXPECT_FALSE(isH264Keyframe(inter, sizeof(inter)));
+}
 
 TEST(RtcpSenderReportTest, BecomesDueAfterOneClockSecond)
 {
