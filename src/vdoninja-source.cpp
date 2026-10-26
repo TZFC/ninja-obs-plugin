@@ -3900,8 +3900,12 @@ bool VDONinjaSource::initializeVideoDecoder()
 		    configureVideoHardwareDecoder(videoDecoder_, codec, videoHwPixelFormat_, videoHwDeviceName_, isVP9);
 	}
 	if (!videoHwDecodeConfigured_) {
+		// Frame threading buffers future pictures before emitting the current one.
+		// Our live video clock starts at decoded output, so that delay would leave
+		// audio ahead by roughly one frame per worker. Keep intra-frame parallelism
+		// without waiting for future RTP frames.
 		videoDecoder_->thread_count = 0;
-		videoDecoder_->thread_type = FF_THREAD_FRAME | FF_THREAD_SLICE;
+		videoDecoder_->thread_type = FF_THREAD_SLICE;
 	}
 
 #if defined(VDONINJA_NATIVE_MEDIA_INTEGRATION_TEST)
@@ -4080,8 +4084,10 @@ bool VDONinjaSource::initializeAlphaDecoder()
 		return false;
 	}
 	alphaDecoder_->pkt_timebase = AVRational{1, 90000};
+	// Match the primary decoder's low-delay policy. The alpha mate must not
+	// hold a composited frame behind an extra frame-threading queue.
 	alphaDecoder_->thread_count = 0;
-	alphaDecoder_->thread_type = FF_THREAD_FRAME | FF_THREAD_SLICE;
+	alphaDecoder_->thread_type = FF_THREAD_SLICE;
 #if defined(VDONINJA_NATIVE_MEDIA_INTEGRATION_TEST)
 	nativeMediaTestAlphaRequestedThreadCount_ = alphaDecoder_->thread_count;
 	nativeMediaTestAlphaRequestedThreadType_ = alphaDecoder_->thread_type;

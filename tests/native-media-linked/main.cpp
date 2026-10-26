@@ -5027,15 +5027,18 @@ void testSendPacketEagainDrainAndRetry(const std::vector<std::vector<uint8_t>> &
 	    [&](AVCodecContext *decoder, AVFrame *frame) {
 		    ++receiveCalls;
 		    const int result = avcodec_receive_frame(decoder, frame);
-		    events.push_back(result == AVERROR(EAGAIN) ? "receive-eagain" : "receive-other");
+		    events.push_back(result == AVERROR(EAGAIN) ? "receive-eagain"
+		                     : result == 0             ? "receive-frame"
+		                                               : "receive-error");
 		    return result;
 	    });
 
 	size_t cursor = 0;
 	const uint32_t firstTimestamp = feedNextGopFrame(source, false, primaryGop, cursor, 6000);
 	require(sendCalls.load() == 2, "EAGAIN path did not retry exactly once");
-	require(receiveCalls.load() == 2, "EAGAIN path did not drain exactly to EAGAIN before and after retry");
-	const std::vector<std::string> expectedEvents = {"send-eagain", "receive-eagain", "send-retry", "receive-eagain"};
+	require(receiveCalls.load() == 3, "EAGAIN path did not drain exactly to EAGAIN before and after retry");
+	const std::vector<std::string> expectedEvents = {"send-eagain", "receive-eagain", "send-retry", "receive-frame",
+	                                                 "receive-eagain"};
 	require(events == expectedEvents, "EAGAIN path did not execute send, drain-to-EAGAIN, exact retry, drain");
 	require(retriedSamePacket, "EAGAIN path changed packet pointer/data/size/PTS/DTS/payload before its single retry");
 	source.setNativeMediaTestVideoDecoderHooks(nullptr, nullptr);
@@ -5067,7 +5070,7 @@ void testAlphaSendPacketEagainDrainAndRetry(const std::vector<std::vector<uint8_
 	source.setNativeMediaTestAlphaDecoderHooks(
 	    [&](AVCodecContext *decoder, const AVPacket *packet) {
 		    const int call = ++sendCalls;
-		    if (firstEvents.size() < 4) {
+		    if (firstEvents.size() < 5) {
 			    firstEvents.push_back(call == 1 ? "send-eagain" : "send-retry");
 		    }
 		    if (call == 1) {
@@ -5090,8 +5093,10 @@ void testAlphaSendPacketEagainDrainAndRetry(const std::vector<std::vector<uint8_
 	    [&](AVCodecContext *decoder, AVFrame *frame) {
 		    ++receiveCalls;
 		    const int result = avcodec_receive_frame(decoder, frame);
-		    if (firstEvents.size() < 4) {
-			    firstEvents.push_back(result == AVERROR(EAGAIN) ? "receive-eagain" : "receive-other");
+		    if (firstEvents.size() < 5) {
+			    firstEvents.push_back(result == AVERROR(EAGAIN) ? "receive-eagain"
+			                          : result == 0             ? "receive-frame"
+			                                                    : "receive-error");
 		    }
 		    return result;
 	    });
@@ -5099,8 +5104,9 @@ void testAlphaSendPacketEagainDrainAndRetry(const std::vector<std::vector<uint8_
 	constexpr uint32_t baseTimestamp = 26000;
 	source.feedNativeMediaTestVp9AccessUnit(true, alphaGop[0], baseTimestamp);
 	require(sendCalls.load() == 2, "alpha EAGAIN path did not retry exactly once");
-	require(receiveCalls.load() == 2, "alpha EAGAIN path did not drain exactly to EAGAIN before and after retry");
-	const std::vector<std::string> expectedEvents = {"send-eagain", "receive-eagain", "send-retry", "receive-eagain"};
+	require(receiveCalls.load() == 3, "alpha EAGAIN path did not drain exactly to EAGAIN before and after retry");
+	const std::vector<std::string> expectedEvents = {"send-eagain", "receive-eagain", "send-retry", "receive-frame",
+	                                                 "receive-eagain"};
 	require(firstEvents == expectedEvents,
 	        "alpha EAGAIN path did not execute send, drain-to-EAGAIN, exact retry, drain");
 	require(retriedSamePacket, "alpha EAGAIN path changed packet identity before its single retry");
@@ -5155,52 +5161,55 @@ void testOverlappingDecodedCallbacksSerializeFinalOutput(const std::vector<std::
 	        "overlapping decoded callback retained an AVFrame after final output");
 }
 
-void testLinkedGateUsesShippedDecoderThreading(const std::vector<uint8_t> &primaryAu,
-                                               const std::vector<uint8_t> &alphaAu)
+void testLiveDecodersDoNotWaitForFutureFrames(const std::vector<uint8_t> &primaryAu,
+                                              const std::vector<uint8_t> &alphaAu)
 {
-	VDONinjaSource source(NativeMediaTestTag{});
-	OutputCollector output;
-	source.setNativeMediaTestOutputHook([&output](NativeMediaTestOutput frame) { output.add(std::move(frame)); });
-	source.transitionNativeMediaTestPipeline(true);
-	source.feedNativeMediaTestVp9AccessUnit(false, primaryAu, 9000);
-	source.feedNativeMediaTestVp9AccessUnit(true, alphaAu, 9000);
+	for (bool alphaFirst : {false, true}) {
+		VDONinjaSource source(NativeMediaTestTag{});
+		OutputCollector output;
+		source.setNativeMediaTestOutputHook([&output](NativeMediaTestOutput frame) { output.add(std::move(frame)); });
+		source.transitionNativeMediaTestPipeline(true);
+		const auto feedPair = [&](uint32_t timestamp) {
+			source.feedNativeMediaTestVp9AccessUnit(alphaFirst, alphaFirst ? alphaAu : primaryAu, timestamp);
+			const auto beforeMate = output.size();
+			source.feedNativeMediaTestVp9AccessUnit(!alphaFirst, alphaFirst ? primaryAu : alphaAu, timestamp);
+			require(output.size() == beforeMate + 1, "complete alpha pair waited for future frames to decode");
+			const auto frame = output.copy().back();
+			require(frame.hasAlpha && frame.rtpTimestamp == timestamp,
+			        "low-delay decoder lost the exact alpha pair or originating RTP timestamp");
+		};
+		feedPair(0xfffffe00u);
+		feedPair(0x000009b8u);
+		source.transitionNativeMediaTestPipeline(true);
+		feedPair(12000u);
 
-	const auto snapshot = source.nativeMediaTestSnapshot();
-	require(snapshot.primaryRequestedThreadCount == 0, "linked gate changed the shipped primary decoder thread count");
-	require((snapshot.primaryRequestedThreadType & FF_THREAD_FRAME) != 0,
-	        "linked gate disabled shipped primary frame threading");
-	require(snapshot.alphaRequestedThreadCount == 0, "linked gate changed the shipped alpha decoder thread count");
-	require((snapshot.alphaRequestedThreadType & FF_THREAD_FRAME) != 0,
-	        "linked gate disabled shipped alpha frame threading");
-	require((snapshot.primaryActiveThreadType & FF_THREAD_FRAME) != 0,
-	        "primary decoder did not activate shipped frame threading");
-	require((snapshot.alphaActiveThreadType & FF_THREAD_FRAME) != 0,
-	        "alpha decoder did not activate shipped frame threading");
+		const auto snapshot = source.nativeMediaTestSnapshot();
+		require(snapshot.primaryRequestedThreadCount == 0 && snapshot.alphaRequestedThreadCount == 0,
+		        "live decoder disabled automatic intra-frame parallelism");
+		require(snapshot.primaryRequestedThreadType == FF_THREAD_SLICE &&
+		            snapshot.alphaRequestedThreadType == FF_THREAD_SLICE,
+		        "live decoder requested frame buffering instead of slice threading");
+		require((snapshot.primaryActiveThreadType & FF_THREAD_FRAME) == 0 &&
+		            (snapshot.alphaActiveThreadType & FF_THREAD_FRAME) == 0,
+		        "live decoder activated frame-threading delay");
+	}
 }
 
-void testFrameThreadedDecodePreservesRtpPts(const std::vector<std::vector<uint8_t>> &primaryGop)
+void testImmediateDecodePreservesRtpPts(const std::vector<std::vector<uint8_t>> &primaryGop)
 {
 	VDONinjaSource source(NativeMediaTestTag{});
 	OutputCollector output;
 	source.setNativeMediaTestOutputHook([&output](NativeMediaTestOutput frame) { output.add(std::move(frame)); });
 	source.transitionNativeMediaTestPipeline(false);
-	std::vector<uint32_t> submitted;
+	uint64_t previousOutput = 0;
 	for (size_t index = 0; index < primaryGop.size(); ++index) {
-		const uint32_t timestamp = 100000u + static_cast<uint32_t>(index) * 3000u;
-		submitted.push_back(timestamp);
+		const uint32_t timestamp = 0xfffffe00u + static_cast<uint32_t>(index) * 3000u;
 		source.feedNativeMediaTestVp9AccessUnit(false, primaryGop[index], timestamp);
-	}
-
-	const auto frames = output.copy();
-	require(frames.size() >= 8, "shipped frame-threaded decoder did not produce enough delayed VP9 output");
-	require(frames.size() < submitted.size(), "frame-threaded gate did not exercise decoder-retained delayed output");
-	for (size_t index = 0; index < frames.size(); ++index) {
-		require(frames[index].rtpTimestamp == submitted[index],
-		        "delayed frame-threaded decode lost its originating RTP PTS");
-		if (index > 0) {
-			require(frames[index].outputTimestampNs > frames[index - 1].outputTimestampNs,
-			        "delayed frame-threaded output timestamp was not monotonic");
-		}
+		const auto frames = output.copy();
+		require(frames.size() == index + 1, "VP9 GOP decoding retained frames until future packets arrived");
+		require(frames.back().rtpTimestamp == timestamp, "immediate VP9 decode lost its originating RTP PTS");
+		require(frames.back().outputTimestampNs > previousOutput, "immediate output timestamp was not monotonic");
+		previousOutput = frames.back().outputTimestampNs;
 	}
 }
 
@@ -5608,7 +5617,7 @@ void testBoundedVideoIngress(const std::vector<uint8_t> &primaryAu, const std::v
 	require(stats.second > 0, "blocked decode never triggered ingress eviction");
 	latch.release();
 	// Simulate normal ongoing traffic after overload. Both tracks must recover
-	// with matching RTP timestamps, including frame-threaded decoder delay.
+	// with matching RTP timestamps after both decoders have been reset.
 	for (uint32_t i = 6002; i < 6050; ++i) {
 		feed(true, i * 3000);
 		feed(false, i * 3000);
@@ -5764,10 +5773,10 @@ int main(int argc, char **argv)
 		    {"bounded video ingress and transparent overload recovery",
 		     [&]() { testBoundedVideoIngress(primaryAu, alphaAu); }},
 		    {"video ingress VP9 prediction loss recovery", [&]() { testIngressPredictionRecovery(primaryGop); }},
-		    {"shipped decoder threading configuration",
-		     [&]() { testLinkedGateUsesShippedDecoderThreading(primaryAu, alphaAu); }},
-		    {"frame-thread delayed decode preserves originating RTP PTS",
-		     [&]() { testFrameThreadedDecodePreservesRtpPts(primaryGop); }},
+		    {"live alpha decoders emit complete pairs without future frames",
+		     [&]() { testLiveDecodersDoNotWaitForFutureFrames(primaryAu, alphaAu); }},
+		    {"immediate VP9 GOP decode preserves originating RTP PTS",
+		     [&]() { testImmediateDecodePreservesRtpPts(primaryGop); }},
 		    {"real VP9 decode and alpha composition",
 		     [&]() { testRealDecodeAndAlphaComposition(primaryGop, alphaGop); }},
 		    {"RTP age eviction/reorder/drop/wrap/recovery",
