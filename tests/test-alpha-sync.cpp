@@ -550,3 +550,20 @@ TEST(AlphaSyncTest, FutureTimestampRebaseRemainsMonotonicAndDoesNotUnderflow)
 	EXPECT_EQ(mapper.map(180000, 3), 100000002u);
 	EXPECT_EQ(mapper.map(181500, 200000000), 100000002u + 1000000000ULL / 60);
 }
+
+TEST(AlphaSyncTest, PastTimestampRebaseEliminatesLagBuildup)
+{
+	RtpOutputTimestampMapper mapper;
+	constexpr uint64_t baseNs = 10000000000ULL;
+	EXPECT_EQ(mapper.map(0, baseNs), baseNs);
+	// Normal 60 fps frame at 16.6ms
+	EXPECT_EQ(mapper.map(1500, baseNs + 16666666ULL), baseNs + 16666666ULL);
+	// Network stall: 1.5 seconds elapse on wall clock, but sender RTP only advances by 1 frame (1500 ticks = 16.6ms)
+	// Without past rebase, mapped would be baseNs + 33.3ms, which is ~1.5s behind wall clock.
+	// With past rebase, mapped is re-anchored to the live wall clock to eliminate lag buildup.
+	const uint64_t stallArrivalNs = baseNs + 1500000000ULL;
+	EXPECT_EQ(mapper.map(3000, stallArrivalNs), stallArrivalNs);
+	// Next frame follows smoothly from the rebased anchor
+	EXPECT_EQ(mapper.map(4500, stallArrivalNs + 16666666ULL), stallArrivalNs + 1000000000ULL / 60);
+}
+
